@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "X AI Lead Finder",
+    "slug": "x-ai-lead-finder",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#090d16"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#090d16"
+      }
+    },
+    "extra": {
+      "defaultBackendUrl": "https://x-ai-lead-finder-backend.onrender.com"
+    }
+  }
+}

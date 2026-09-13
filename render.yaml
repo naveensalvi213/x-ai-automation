@@ -1,0 +1,24 @@
+# ==============================================================================
+# Render Blueprint Specification: X AI Automation Lead Finder
+# Docs: https://render.com/docs/blueprint-spec
+# ==============================================================================
+
+services:
+  - type: web
+    name: x-ai-lead-finder-backend
+    env: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        value: AQ.Ab8RN6JvkY_4jiC_fzmBr7xtDhOBUYNh2qD7UUHbox3EriGcNA
+      - key: TWITTER_AUTH_TOKEN
+        value: c2da45c233f3df908c9e6ab309afc01f36efb441
