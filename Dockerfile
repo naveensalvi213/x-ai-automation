@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . /app
 
-RUN pip install --no-cache-dir flask google-genai playwright
+RUN pip install --no-cache-dir flask google-genai playwright==1.42.0
 
 ENV PORT=10000
 ENV PYTHONUNBUFFERED=1
