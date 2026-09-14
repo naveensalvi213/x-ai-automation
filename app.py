@@ -30,11 +30,13 @@ OUR AGENCY CAPABILITIES & OFFER:
 YOUR TASK:
 Analyze the following scraped X (Twitter) posts and identify potential client leads.
 
-QUALIFICATION CATEGORIES:
+QUALIFICATION CATEGORIES (QUALIFY BOTH 1 AND 2):
 1. DIRECT BUYERS (80-100% Intent): Explicitly asking for AI developers, chatbots, web scrapers, workflow automations, or hiring software engineers.
-2. WARM PROSPECTS (50-79% Intent): Business owners, founders, service providers (doctors, lawyers, agency owners, contractors), or operators discussing manual workload, hiring help, needing software solutions, or asking how to streamline their operations.
+2. BUSINESS PROSPECTS (50-79% Intent): Business coaches, consultants, founders, agency owners, contractors, or operators discussing business growth, client lead gen, manual workload, scaling operations, or needing digital tools.
 
-FILTER OUT ONLY: Pure spam, crypto/NFT hype, bot accounts, other agencies self-promoting their own services, and completely unrelated memes.
+FILTER OUT ONLY: Pure spam, crypto/NFT hype, bot accounts, and completely unrelated jokes/memes.
+
+DO NOT BE TOO STRICT. If a tweet is from a business coach, founder, or operator who could benefit from custom AI automations or lead generation tools, INCLUDE THEM as a qualified prospect with a tailored DM pitch!
 
 For each qualified lead, output a structured JSON array of lead objects. Each object MUST contain:
 - "name": string (Author name)
@@ -69,20 +71,22 @@ def qualify_tweets_with_gemini(tweets: list, api_key: str = None) -> str:
 
     prompt_content = f"{GEMINI_QUALIFICATION_PROMPT}\n\nTWEETS TO EVALUATE:\n{json.dumps(prepared_tweets, indent=2)}"
 
-    try:
-        client = genai.Client(api_key=key_to_use)
-        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt_content)
-        return response.text or ""
-    except Exception as e:
-        print(f"❌ Gemini Qualification Error ({GEMINI_MODEL}): {e}")
-        # Try fallback model if gemini-3.6-flash hits rate limit
+    # Robust 3-attempt retry loop with exponential backoff for Gemini 3.6 Flash
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
         try:
+            print(f"🤖 Gemini 3.6 Qualification Attempt #{attempt}...", flush=True)
             client = genai.Client(api_key=key_to_use)
-            response = client.models.generate_content(model="gemini-3.5-flash", contents=prompt_content)
-            return response.text or ""
-        except Exception as e2:
-            print(f"❌ Gemini Fallback Error: {e2}")
-            return ""
+            response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt_content)
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            print(f"⚠️ Gemini Attempt #{attempt} Error ({GEMINI_MODEL}): {e}", flush=True)
+            if attempt < max_retries:
+                time.sleep(1.5 * attempt)
+
+    print("❌ All Gemini Qualification retries exhausted.", flush=True)
+    return ""
 
 # ─── OPTIMIZED FAST & SAFE PLAYWRIGHT ENGINE ─────────────────────────────────
 
@@ -862,12 +866,15 @@ document.addEventListener("DOMContentLoaded", function() {
 
     try {
       var cleaned = rawOutput.replace(/```json/g, "").replace(/```/g, "").trim();
-      if (cleaned.startsWith("[") && cleaned.endsWith("]")) {
-        leads = JSON.parse(cleaned);
+      var firstBracket = cleaned.indexOf('[');
+      var lastBracket = cleaned.lastIndexOf(']');
+      if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+        var jsonSub = cleaned.substring(firstBracket, lastBracket + 1);
+        leads = JSON.parse(jsonSub);
         isJsonArray = true;
       }
     } catch (e) {
-      console.log("Gemini plain markdown output mode");
+      console.log("Gemini plain markdown output mode", e);
     }
 
     if (isJsonArray && leads.length === 0) {
@@ -888,6 +895,21 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     if (Array.isArray(leads) && leads.length > 0) {
+      currentLeads = leads;
+
+      var topBanner = document.createElement("div");
+      topBanner.style.cssText = "background:linear-gradient(135deg, #1e1b4b, #0f172a);border:1.5px solid #6366f1;border-radius:16px;padding:18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px";
+      topBanner.innerHTML = `
+        <div>
+          <div style="font-weight:800;font-size:16px;color:#818cf8">🔥 ${leads.length} QUALIFIED BUYER LEADS FOUND</div>
+          <div style="font-size:12.5px;color:#94a3b8">Evaluated by Gemini 3.6 Flash Engine</div>
+        </div>
+        <button class="btn-primary" style="background:#6366f1;padding:10px 18px;font-size:13.5px;border:none;border-radius:10px;font-weight:800;color:#fff;cursor:pointer" onclick="shareAllLeadsAtOnce()">
+          📲 Share ALL ${leads.length} Leads at Once (With Links)
+        </button>
+      `;
+      geminiFeed.appendChild(topBanner);
+
       leads.forEach(function(lead) {
         var card = document.createElement("div");
         card.className = "lead-card";
@@ -907,10 +929,11 @@ document.addEventListener("DOMContentLoaded", function() {
               <div>"${escapeHtml(lead.suggestedDm)}"</div>
             </div>
           ` : ''}
-          <div style="display:flex;gap:12px;margin-top:4px">
+          <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap">
             ${lead.tweetUrl ? `<a href="${lead.tweetUrl}" target="_blank" class="btn-sm">🔗 View Tweet on X</a>` : ''}
             ${lead.profileUrl ? `<a href="${lead.profileUrl}" target="_blank" class="btn-sm">👤 View Profile</a>` : ''}
             ${lead.suggestedDm ? `<button class="btn-sm" onclick="copyText('${escapeJs(lead.suggestedDm)}')">📋 Copy DM</button>` : ''}
+            <button class="btn-sm" style="background:#0284c7;color:#fff;border:none;font-weight:700" onclick="shareLeadDetails('${escapeJs(lead.name)}','${escapeJs(lead.handle)}','${escapeJs(lead.tweet)}','${escapeJs(lead.reasoning||'')}','${escapeJs(lead.suggestedDm||'')}','${escapeJs(lead.tweetUrl||'')}','${escapeJs(lead.profileUrl||'')}','${score}')">📲 Share Details with Links</button>
           </div>
         `;
 
@@ -920,6 +943,56 @@ document.addEventListener("DOMContentLoaded", function() {
       geminiFeed.innerHTML = `<div style="background:var(--surface2);padding:18px;border-radius:14px;line-height:1.7;color:#e2e8f0">${formatMarkdown(rawOutput || "No qualified buyer leads identified in this batch.")}</div>`;
     }
   }
+
+  window.shareAllLeadsAtOnce = function() {
+    if (!currentLeads || currentLeads.length === 0) {
+      alert("No qualified leads available to share.");
+      return;
+    }
+    var fullReport = "🔥 *X AI LEAD FINDER — BATCH REPORT (" + currentLeads.length + " LEADS)* 🔥\n\n";
+    currentLeads.forEach(function(item, idx) {
+      var score = item.intentScore || 90;
+      fullReport += "----------------------------------------\n" +
+        (idx + 1) + ". 🎯 *" + item.name + "* (" + item.handle + ") — *" + score + "% Match*\n" +
+        (item.reasoning ? "💡 *Why:* " + item.reasoning + "\n" : "") +
+        "💬 *Tweet:* \"" + item.tweet + "\"\n" +
+        (item.suggestedDm ? "📝 *Suggested DM:* \"" + item.suggestedDm + "\"\n" : "") +
+        (item.tweetUrl ? "🔗 *Tweet Link:* " + item.tweetUrl + "\n" : "") +
+        (item.profileUrl ? "👤 *Profile Link:* " + item.profileUrl + "\n" : "") +
+        "\n";
+    });
+
+    if (navigator.share) {
+      navigator.share({
+        title: "X AI Lead Finder - " + currentLeads.length + " Qualified Leads",
+        text: fullReport
+      }).catch(function(e) { console.log("Share canceled", e); });
+    } else {
+      copyText(fullReport);
+      alert("📲 ALL " + currentLeads.length + " lead reports with links copied to clipboard ready to share on WhatsApp/Telegram!");
+    }
+  };
+
+  window.shareLeadDetails = function(name, handle, tweet, reasoning, dm, tweetUrl, profileUrl, score) {
+    var shareText = "🎯 X AI LEAD DETAILS (" + (score || 90) + "% Buyer Match)\n\n" +
+      "👤 Client: " + name + " (" + handle + ")\n" +
+      (reasoning ? "💡 Why a Buyer: " + reasoning + "\n\n" : "") +
+      "💬 Original Tweet:\n\"" + tweet + "\"\n\n" +
+      (dm ? "📝 Suggested DM Pitch:\n\"" + dm + "\"\n\n" : "") +
+      (tweetUrl ? "🔗 Tweet Link: " + tweetUrl + "\n" : "") +
+      (profileUrl ? "👤 Profile Link: " + profileUrl + "\n" : "");
+
+    if (navigator.share) {
+      navigator.share({
+        title: "X Lead: " + name + " (" + handle + ")",
+        text: shareText,
+        url: tweetUrl || profileUrl
+      }).catch(function(e) { console.log("Share canceled", e); });
+    } else {
+      copyText(shareText);
+      alert("📲 Lead details & links copied to clipboard ready to share on WhatsApp / Telegram!");
+    }
+  };
 
   window.setPresetKeywords = function(presetText) {
     keywordsInput.value = presetText;
