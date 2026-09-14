@@ -23,7 +23,7 @@ export default function App() {
   const [posts, setPosts] = useState([]);
   const [leads, setLeads] = useState([]);
   const [activeTab, setActiveTab] = useState('leads'); // 'leads' | 'all'
-  const [backendUrl, setBackendUrl] = useState('http://localhost:5000');
+  const [backendUrl, setBackendUrl] = useState('http://10.222.207.88:5000');
   const [showSettings, setShowSettings] = useState(false);
 
   const presets = [
@@ -71,7 +71,7 @@ export default function App() {
       setIsLoading(false);
       Alert.alert(
         'Connection Error',
-        `Could not connect to server at ${backendUrl}.\nEnsure the cloud backend is running!`
+        `Could not connect to server at ${backendUrl}.\n\n💡 Tip: If using Wi-Fi, enter your PC IP (http://10.222.207.88:5000).\nIf using Render Cloud, enter your Render URL (https://...onrender.com).`
       );
     }
   };
@@ -121,16 +121,16 @@ export default function App() {
       {/* SETTINGS CARD TOGGLE */}
       {showSettings ? (
         <View style={styles.settingsCard}>
-          <Text style={styles.settingLabel}>Cloud Backend API URL:</Text>
+          <Text style={styles.settingLabel}>Cloud / Backend API URL:</Text>
           <TextInput
             style={styles.settingInput}
             value={backendUrl}
             onChangeText={setBackendUrl}
-            placeholder="https://your-backend.onrender.com"
+            placeholder="https://your-app.onrender.com"
             placeholderTextColor="#71717a"
             autoCapitalize="none"
           />
-          <Text style={styles.settingHint}>Default: http://localhost:5000 or your Render Cloud URL</Text>
+          <Text style={styles.settingHint}>Wi-Fi: http://10.222.207.88:5000 | Render: https://...onrender.com</Text>
         </View>
       ) : null}
 
@@ -142,7 +142,7 @@ export default function App() {
             <Text style={styles.heroBadge}>GEMINI 3.6 ACTIVE</Text>
             <Text style={styles.heroStatus}>⚡ 24/7 AI Lead Scraper</Text>
           </View>
-          <Text style={styles.heroTitle}>Red Crimson AI Lead Qualifier</Text>
+          <Text style={styles.heroTitle}>AI Lead Qualifier</Text>
           <Text style={styles.heroDesc}>
             Scrapes X in real-time & qualifies high-ticket AI automation buyers for your agency (Claude, Google Antigravity, Custom Systems).
           </Text>
