@@ -1,422 +1,698 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   SafeAreaView,
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  StatusBar,
-  StyleSheet,
-  Modal,
+  ScrollView,
   ActivityIndicator,
+  Linking,
+  StyleSheet,
+  StatusBar,
+  Share,
+  Clipboard,
+  Alert,
 } from 'react-native';
-import {
-  DEFAULT_BACKEND_URL,
-  LOCAL_BACKEND_URL,
-  checkServerHealth,
-  normalizeBackendUrl,
-} from './src/services/api.js';
-import ChatScreen from './src/components/ChatScreen.js';
 
-export function App() {
-  const [backendUrl, setBackendUrl] = useState(DEFAULT_BACKEND_URL);
-  const [inputUrl, setInputUrl] = useState(DEFAULT_BACKEND_URL);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('checking'); // 'connected' | 'checking' | 'error'
-  const [statusMessage, setStatusMessage] = useState('Connecting to Render Backend...');
-  const [isChecking, setIsChecking] = useState(false);
+export default function App() {
+  const [keywords, setKeywords] = useState('need chatbot, hire developer, web scraper, AI automation');
+  const [scrollDepth, setScrollDepth] = useState('5');
+  const [isLoading, setIsLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [posts, setPosts] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [activeTab, setActiveTab] = useState('leads'); // 'leads' | 'all'
+  const [backendUrl, setBackendUrl] = useState('http://localhost:5000');
+  const [showSettings, setShowSettings] = useState(false);
 
-  const verifyConnection = async (urlToTest) => {
-    setIsChecking(true);
-    setConnectionStatus('checking');
-    setStatusMessage('Checking backend health...');
+  const presets = [
+    'need chatbot, hire developer',
+    'web scraper, AI automation',
+    'looking for ai developer',
+    'need n8n developer, build bot',
+  ];
 
-    const result = await checkServerHealth({ backendUrl: urlToTest });
-    setIsChecking(false);
+  const handleStartScrape = async () => {
+    if (!keywords.trim()) {
+      Alert.alert('Missing Keyword', 'Please enter at least one search keyword!');
+      return;
+    }
 
-    if (result.connected) {
-      setConnectionStatus('connected');
-      const isRender = result.url.includes('onrender.com');
-      setStatusMessage(
-        isRender ? 'Connected to Render Backend' : `Connected to Backend (${result.url})`
+    setIsLoading(true);
+    setStatusMessage('🔥 Phase 1: Scraping X feeds with Playwright Chromium...');
+    setPosts([]);
+    setLeads([]);
+
+    try {
+      const response = await fetch(`${backendUrl}/api/scrape`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keywords: keywords,
+          maxScrolls: parseInt(scrollDepth, 10) || 5,
+        }),
+      });
+
+      const data = await response.json();
+      setIsLoading(false);
+
+      if (data.error) {
+        Alert.alert('Scrape Error', data.error);
+        return;
+      }
+
+      setPosts(data.posts || []);
+
+      if (data.geminiReport) {
+        parseGeminiReport(data.geminiReport);
+      }
+    } catch (err) {
+      setIsLoading(false);
+      Alert.alert(
+        'Connection Error',
+        `Could not connect to server at ${backendUrl}.\nEnsure the cloud backend is running!`
       );
-    } else {
-      setConnectionStatus('error');
-      setStatusMessage(`Backend Unreachable (${result.error || 'Check URL'})`);
     }
   };
 
-  useEffect(() => {
-    verifyConnection(backendUrl);
-  }, [backendUrl]);
-
-  const handleApplyUrl = (newUrl) => {
-    const cleaned = normalizeBackendUrl(newUrl);
-    setBackendUrl(cleaned);
-    setInputUrl(cleaned);
-    setIsSettingsOpen(false);
-  };
-
-  const getStatusDotColor = () => {
-    switch (connectionStatus) {
-      case 'connected':
-        return '#10b981'; // Emerald
-      case 'checking':
-        return '#f59e0b'; // Amber
-      case 'error':
-      default:
-        return '#ef4444'; // Red
+  const parseGeminiReport = (rawReport) => {
+    try {
+      const cleaned = rawReport.replace(/```json/g, '').replace(/```/g, '').trim();
+      if (cleaned.startsWith('[') && cleaned.endsWith(']')) {
+        const parsed = JSON.parse(cleaned);
+        setLeads(parsed);
+      }
+    } catch (e) {
+      console.log('Plain text Gemini report mode');
     }
   };
 
-  return React.createElement(
-    SafeAreaView,
-    { style: styles.safeArea, testID: 'root-app' },
-    React.createElement(StatusBar, {
-      barStyle: 'light-content',
-      backgroundColor: '#090d16',
-    }),
+  const handleCopy = (text) => {
+    Clipboard.setString(text);
+    Alert.alert('Copied! 📋', 'DM Pitch copied to clipboard ready to send on X!');
+  };
 
-    // Header Bar with Status Indicator & Settings Toggle
-    React.createElement(
-      View,
-      { style: styles.header, testID: 'app-header' },
-      React.createElement(
-        View,
-        { style: styles.titleBlock },
-        React.createElement(
-          Text,
-          { style: styles.appTitle },
-          '⚡ X AI Lead Finder'
-        ),
-        React.createElement(
-          View,
-          { style: styles.statusRow },
-          React.createElement(View, {
-            style: [styles.statusDot, { backgroundColor: getStatusDotColor() }],
-            testID: 'status-indicator-dot',
-          }),
-          React.createElement(
-            Text,
-            { style: styles.statusText, numberOfLines: 1 },
-            statusMessage
-          )
-        )
-      ),
-      React.createElement(
-        TouchableOpacity,
-        {
-          style: styles.settingsButton,
-          onPress: () => setIsSettingsOpen(true),
-          activeOpacity: 0.7,
-          testID: 'btn-open-settings',
-        },
-        React.createElement(Text, { style: styles.settingsButtonText }, '⚙️ Settings')
-      )
-    ),
+  const handleOpenUrl = (url) => {
+    if (url) Linking.openURL(url);
+  };
 
-    // Main Chat Screen Feed
-    React.createElement(
-      View,
-      { style: styles.contentContainer },
-      React.createElement(ChatScreen, {
-        backendUrl,
-        onStatusChange: (msg) => setStatusMessage(msg),
-      })
-    ),
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#050508" />
 
-    // Settings Modal for Backend URL Configuration
-    React.createElement(
-      Modal,
-      {
-        visible: isSettingsOpen,
-        animationType: 'slide',
-        transparent: true,
-        onRequestClose: () => setIsSettingsOpen(false),
-        testID: 'settings-modal',
-      },
-      React.createElement(
-        View,
-        { style: styles.modalOverlay },
-        React.createElement(
-          View,
-          { style: styles.modalCard },
-          React.createElement(
-            Text,
-            { style: styles.modalTitle },
-            '⚙️ Backend Server Settings'
-          ),
-          React.createElement(
-            Text,
-            { style: styles.modalDescription },
-            'Configure the backend endpoint for Playwright scraping and Gemini AI qualification.'
-          ),
+      {/* HEADER */}
+      <View style={styles.header}>
+        <View style={styles.brandRow}>
+          <View style={styles.logoBadge}>
+            <Text style={styles.logoIcon}>🔥</Text>
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>X AI LEAD FINDER</Text>
+            <Text style={styles.headerSub}>Gemini 3.6 AI Lead Qualifier</Text>
+          </View>
+        </View>
 
-          // Presets
-          React.createElement(
-            View,
-            { style: styles.presetsRow },
-            React.createElement(
-              TouchableOpacity,
-              {
-                style: styles.presetBtn,
-                onPress: () => setInputUrl(DEFAULT_BACKEND_URL),
-                activeOpacity: 0.7,
-              },
-              React.createElement(
-                Text,
-                { style: styles.presetBtnText },
-                '🌐 Render Cloud'
-              )
-            ),
-            React.createElement(
-              TouchableOpacity,
-              {
-                style: styles.presetBtn,
-                onPress: () => setInputUrl(LOCAL_BACKEND_URL),
-                activeOpacity: 0.7,
-              },
-              React.createElement(
-                Text,
-                { style: styles.presetBtnText },
-                '💻 Localhost (10000)'
-              )
-            )
-          ),
+        <TouchableOpacity style={styles.settingsBtn} onPress={() => setShowSettings(!showSettings)}>
+          <Text style={styles.settingsBtnText}>⚙️</Text>
+        </TouchableOpacity>
+      </View>
 
-          // URL Input
-          React.createElement(
-            Text,
-            { style: styles.inputLabel },
-            'Backend API Base URL:'
-          ),
-          React.createElement(TextInput, {
-            style: styles.urlInput,
-            value: inputUrl,
-            onChangeText: setInputUrl,
-            placeholder: 'https://...',
-            placeholderTextColor: '#64748b',
-            autoCapitalize: 'none',
-            autoCorrect: false,
-            testID: 'input-backend-url',
-          }),
+      {/* SETTINGS CARD TOGGLE */}
+      {showSettings ? (
+        <View style={styles.settingsCard}>
+          <Text style={styles.settingLabel}>Cloud Backend API URL:</Text>
+          <TextInput
+            style={styles.settingInput}
+            value={backendUrl}
+            onChangeText={setBackendUrl}
+            placeholder="https://your-backend.onrender.com"
+            placeholderTextColor="#71717a"
+            autoCapitalize="none"
+          />
+          <Text style={styles.settingHint}>Default: http://localhost:5000 or your Render Cloud URL</Text>
+        </View>
+      ) : null}
 
-          // Action Buttons
-          React.createElement(
-            View,
-            { style: styles.modalActions },
-            React.createElement(
-              TouchableOpacity,
-              {
-                style: [styles.modalActionBtn, styles.testBtn],
-                onPress: () => verifyConnection(inputUrl),
-                disabled: isChecking,
-                activeOpacity: 0.7,
-              },
-              isChecking
-                ? React.createElement(ActivityIndicator, {
-                    size: 'small',
-                    color: '#38bdf8',
-                  })
-                : React.createElement(
-                    Text,
-                    { style: styles.testBtnText },
-                    'Ping Health'
-                  )
-            ),
-            React.createElement(
-              TouchableOpacity,
-              {
-                style: [styles.modalActionBtn, styles.saveBtn],
-                onPress: () => handleApplyUrl(inputUrl),
-                activeOpacity: 0.7,
-                testID: 'btn-save-url',
-              },
-              React.createElement(
-                Text,
-                { style: styles.saveBtnText },
-                'Save & Connect'
-              )
-            )
-          ),
+      <ScrollView style={styles.scrollView} contentContainerStyle={{ paddingBottom: 40 }}>
+        
+        {/* HERO GEMINI BANNER */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroBadgeRow}>
+            <Text style={styles.heroBadge}>GEMINI 3.6 ACTIVE</Text>
+            <Text style={styles.heroStatus}>⚡ 24/7 AI Lead Scraper</Text>
+          </View>
+          <Text style={styles.heroTitle}>Red Crimson AI Lead Qualifier</Text>
+          <Text style={styles.heroDesc}>
+            Scrapes X in real-time & qualifies high-ticket AI automation buyers for your agency (Claude, Google Antigravity, Custom Systems).
+          </Text>
+        </View>
 
-          // Close Modal Button
-          React.createElement(
-            TouchableOpacity,
-            {
-              style: styles.closeModalBtn,
-              onPress: () => setIsSettingsOpen(false),
-            },
-            React.createElement(
-              Text,
-              { style: styles.closeModalText },
-              'Cancel'
-            )
-          )
-        )
-      )
-    )
+        {/* INPUT CARD */}
+        <View style={styles.card}>
+          <Text style={styles.inputLabel}>ENTER KEYWORDS TO SEARCH ON X:</Text>
+          <TextInput
+            style={styles.textArea}
+            value={keywords}
+            onChangeText={setKeywords}
+            placeholder="need chatbot, hire developer, web scraper"
+            placeholderTextColor="#52525b"
+            multiline
+          />
+
+          {/* PRESET CHIPS */}
+          <Text style={styles.presetTitle}>QUICK HIGH-INTENT PRESETS:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.presetScroll}>
+            {presets.map((item, idx) => (
+              <TouchableOpacity key={idx} style={styles.chip} onPress={() => setKeywords(item)}>
+                <Text style={styles.chipText}>⚡ {item}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* CONTROLS */}
+          <View style={styles.controlsRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>SCROLL DEPTH:</Text>
+              <TextInput
+                style={styles.numberInput}
+                value={scrollDepth}
+                onChangeText={setScrollDepth}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
+              onPress={handleStartScrape}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#ffffff" size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>🚀 RUN AI SCRAPE</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* LOADING STATUS */}
+        {isLoading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="medium" color="#ef4444" />
+            <Text style={styles.loadingText}>{statusMessage}</Text>
+          </View>
+        ) : null}
+
+        {/* TAB BAR */}
+        {posts.length > 0 || leads.length > 0 ? (
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'leads' && styles.tabActive]}
+              onPress={() => setActiveTab('leads')}
+            >
+              <Text style={[styles.tabText, activeTab === 'leads' && styles.tabTextActive]}>
+                🎯 QUALIFIED LEADS ({leads.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'all' && styles.tabActive]}
+              onPress={() => setActiveTab('all')}
+            >
+              <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
+                📋 ALL POSTS ({posts.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* LEADS FEED */}
+        {activeTab === 'leads' && leads.length > 0
+          ? leads.map((lead, idx) => (
+              <View key={idx} style={styles.leadCard}>
+                <View style={styles.leadHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.leadName}>{lead.name}</Text>
+                    <Text style={styles.leadHandle}>{lead.handle}</Text>
+                  </View>
+                  <View style={styles.scoreBadge}>
+                    <Text style={styles.scoreText}>🔥 {lead.intentScore || 90}% INTENT</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.leadTweet}>"{lead.tweet}"</Text>
+
+                {lead.reasoning ? (
+                  <View style={styles.reasoningBox}>
+                    <Text style={styles.reasoningText}>💡 {lead.reasoning}</Text>
+                  </View>
+                ) : null}
+
+                {lead.suggestedDm ? (
+                  <View style={styles.dmBox}>
+                    <Text style={styles.dmLabel}>✉️ SUGGESTED DM PITCH:</Text>
+                    <Text style={styles.dmText}>"{lead.suggestedDm}"</Text>
+                  </View>
+                ) : null}
+
+                {/* ACTIONS */}
+                <View style={styles.actionRow}>
+                  {lead.tweetUrl ? (
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => handleOpenUrl(lead.tweetUrl)}>
+                      <Text style={styles.actionBtnText}>🔗 Tweet</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {lead.profileUrl ? (
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => handleOpenUrl(lead.profileUrl)}>
+                      <Text style={styles.actionBtnText}>👤 Profile</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {lead.suggestedDm ? (
+                    <TouchableOpacity style={styles.actionBtnRed} onPress={() => handleCopy(lead.suggestedDm)}>
+                      <Text style={styles.actionBtnRedText}>📋 Copy DM</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+            ))
+          : null}
+
+        {/* RAW POSTS FEED */}
+        {activeTab === 'all' && posts.length > 0
+          ? posts.map((p, idx) => (
+              <View key={idx} style={styles.postCard}>
+                <View style={styles.postHeader}>
+                  <Text style={styles.postAuthor}>{p.name}</Text>
+                  <Text style={styles.postHandle}>{p.handle}</Text>
+                </View>
+                <Text style={styles.postText}>{p.text}</Text>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => handleOpenUrl(p.tweetUrl)}>
+                    <Text style={styles.actionBtnText}>🔗 Open Tweet on X</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          : null}
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
+// ─── CRIMSON RED & ONYX BLACK CYBERPUNK STYLES ──────────────────────────────
+
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: '#090d16',
+    backgroundColor: '#050508',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-    backgroundColor: '#0c111d',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#0d0d12',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#9f1239',
   },
-  titleBlock: {
-    flex: 1,
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  appTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+  logoBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#b91c1c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#ef4444',
+    shadowRadius: 10,
+    shadowOpacity: 0.6,
+    elevation: 8,
+  },
+  logoIcon: {
+    fontSize: 22,
+  },
+  headerTitle: {
     color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '900',
     letterSpacing: 0.5,
   },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    color: '#94a3b8',
-    fontWeight: '500',
-    flexShrink: 1,
-  },
-  settingsButton: {
-    backgroundColor: '#1e293b',
-    borderColor: '#334155',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginLeft: 8,
-  },
-  settingsButtonText: {
-    color: '#38bdf8',
-    fontSize: 12,
+  headerSub: {
+    color: '#ef4444',
+    fontSize: 11,
     fontWeight: '700',
   },
-  contentContainer: {
-    flex: 1,
+  settingsBtn: {
+    padding: 8,
+    backgroundColor: '#18181b',
+    borderRadius: 10,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    backgroundColor: '#111827',
-    borderColor: '#1f2937',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 20,
-  },
-  modalTitle: {
+  settingsBtnText: {
     fontSize: 18,
+  },
+  settingsCard: {
+    backgroundColor: '#111116',
+    margin: 16,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#9f1239',
+  },
+  settingLabel: {
+    color: '#f43f5e',
+    fontSize: 12,
     fontWeight: '800',
-    color: '#f8fafc',
     marginBottom: 6,
   },
-  modalDescription: {
-    fontSize: 13,
-    color: '#94a3b8',
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  presetsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  presetBtn: {
-    flex: 1,
-    backgroundColor: '#1e293b',
-    borderColor: '#334155',
+  settingInput: {
+    backgroundColor: '#18181c',
+    color: '#ffffff',
+    padding: 12,
+    borderRadius: 10,
+    fontSize: 14,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignItems: 'center',
+    borderColor: '#27272a',
   },
-  presetBtnText: {
-    color: '#e2e8f0',
+  settingHint: {
+    color: '#71717a',
     fontSize: 11,
-    fontWeight: '600',
+    marginTop: 6,
+  },
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  heroCard: {
+    backgroundColor: '#12070a',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: '#dc2626',
+    marginBottom: 16,
+    shadowColor: '#dc2626',
+    shadowRadius: 12,
+    shadowOpacity: 0.3,
+  },
+  heroBadgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  heroBadge: {
+    backgroundColor: '#9f1239',
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  heroStatus: {
+    color: '#f43f5e',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  heroTitle: {
+    color: '#ffffff',
+    fontSize: 19,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  heroDesc: {
+    color: '#a1a1aa',
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  card: {
+    backgroundColor: '#0d0d12',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    marginBottom: 16,
   },
   inputLabel: {
+    color: '#e4e4e7',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  textArea: {
+    backgroundColor: '#18181c',
+    color: '#ffffff',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#3f3f46',
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 14,
+  },
+  presetTitle: {
+    color: '#71717a',
+    fontSize: 10.5,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  presetScroll: {
+    marginBottom: 14,
+  },
+  chip: {
+    backgroundColor: '#1c0d12',
+    borderWidth: 1,
+    borderColor: '#be123c',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  chipText: {
+    color: '#fb7185',
     fontSize: 12,
     fontWeight: '700',
-    color: '#cbd5e1',
-    marginBottom: 6,
   },
-  urlInput: {
-    backgroundColor: '#1f2937',
-    borderColor: '#374151',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: '#ffffff',
-    fontSize: 13,
-    marginBottom: 18,
-  },
-  modalActions: {
+  controlsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
+    alignItems: 'flex-end',
   },
-  modalActionBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
+  numberInput: {
+    backgroundColor: '#18181c',
+    color: '#ffffff',
+    padding: 12,
+    borderRadius: 12,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#3f3f46',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  primaryButton: {
+    flex: 2,
+    backgroundColor: '#dc2626',
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#ef4444',
+    shadowRadius: 10,
+    shadowOpacity: 0.5,
+    elevation: 6,
   },
-  testBtn: {
-    backgroundColor: '#1e293b',
-    borderColor: '#38bdf8',
-    borderWidth: 1,
+  buttonDisabled: {
+    opacity: 0.5,
   },
-  testBtnText: {
-    color: '#38bdf8',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  saveBtn: {
-    backgroundColor: '#0284c7',
-  },
-  saveBtnText: {
+  primaryButtonText: {
     color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  loadingCard: {
+    backgroundColor: '#18090e',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f43f5e',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  loadingText: {
+    color: '#f43f5e',
     fontSize: 13,
     fontWeight: '700',
   },
-  closeModalBtn: {
-    marginTop: 14,
-    alignItems: 'center',
+  tabContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
   },
-  closeModalText: {
-    color: '#94a3b8',
+  tabButton: {
+    flex: 1,
+    backgroundColor: '#18181c',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  tabActive: {
+    backgroundColor: '#9f1239',
+    borderColor: '#ef4444',
+  },
+  tabText: {
+    color: '#71717a',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  tabTextActive: {
+    color: '#ffffff',
+  },
+  leadCard: {
+    backgroundColor: '#0f0a12',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: '#be123c',
+    marginBottom: 14,
+    shadowColor: '#ef4444',
+    shadowRadius: 8,
+    shadowOpacity: 0.25,
+  },
+  leadHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  leadName: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  leadHandle: {
+    color: '#a1a1aa',
+    fontSize: 12,
+  },
+  scoreBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  scoreText: {
+    color: '#ef4444',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  leadTweet: {
+    color: '#e4e4e7',
+    fontSize: 13.5,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  reasoningBox: {
+    backgroundColor: '#181014',
+    borderLeftWidth: 3,
+    borderLeftColor: '#f43f5e',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  reasoningText: {
+    color: '#fda4af',
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  dmBox: {
+    backgroundColor: '#1c080e',
+    borderWidth: 1,
+    borderColor: '#881337',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  dmLabel: {
+    color: '#fb7185',
+    fontSize: 10.5,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  dmText: {
+    color: '#ffe4e6',
     fontSize: 13,
+    lineHeight: 19,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionBtn: {
+    backgroundColor: '#18181c',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#27272a',
+  },
+  actionBtnText: {
+    color: '#e4e4e7',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  actionBtnRed: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  actionBtnRedText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  postCard: {
+    backgroundColor: '#0d0d12',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    marginBottom: 12,
+  },
+  postHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  postAuthor: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  postHandle: {
+    color: '#71717a',
+    fontSize: 12,
+  },
+  postText: {
+    color: '#d4d4d8',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
   },
 });
-
-export default App;

@@ -1,0 +1,42 @@
+name: 🤖 24/7 X AI Lead Qualification Cron
+
+on:
+  schedule:
+    # Runs automatically every 6 hours in GitHub Cloud (24/7 without PC!)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    # Allows manual 1-click trigger directly from GitHub Mobile app or browser!
+
+jobs:
+  scrape-and-qualify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 Install Python Dependencies & Playwright Browser
+        run: |
+          python -m pip install --upgrade pip
+          pip install flask google-genai playwright
+          playwright install chromium --with-deps
+
+      - name: 🚀 Run Playwright X Scraper & Gemini 3.6 Lead Qualification
+        env:
+          TWITTER_AUTH_TOKEN: ${{ secrets.TWITTER_AUTH_TOKEN || 'c6289fcc9d99ca623baba0a793c4a85a5be67af3' }}
+          TWITTER_CT0: ${{ secrets.TWITTER_CT0 || '0dee5e8b0c3b6578fc8a515bb1a5c39172903851fcbe08749d032ebd12aeeae9b7b3630fe445025cd0b0a7a5c377440e47310e811717506e897935e6749506aa5e3ee9bdab27538951298508bfe0a8d9' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || 'AQ.Ab8RN6Iv19d_KBGtzJIGxc61b_5tUaAE7w8-PF85xXRKjyrcjw' }}
+          KEYWORDS: "need chatbot, hire developer, web scraper, AI automation"
+        run: |
+          python run_cli_qualifier.py
+
+      - name: 📄 Upload Qualified Leads Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-qualified-leads
+          path: latest_leads.json

@@ -7,18 +7,18 @@ services:
   - type: web
     name: x-ai-lead-finder-backend
     env: docker
-    dockerfilePath: backend/Dockerfile
-    dockerContext: backend
+    dockerfilePath: Dockerfile
+    dockerContext: .
     plan: starter
     region: oregon
-    healthCheckPath: /health
+    healthCheckPath: /
     autoDeploy: true
     envVars:
       - key: PORT
         value: 10000
-      - key: NODE_ENV
-        value: production
       - key: GEMINI_API_KEY
-        value: AQ.Ab8RN6JvkY_4jiC_fzmBr7xtDhOBUYNh2qD7UUHbox3EriGcNA
+        value: AQ.Ab8RN6Iv19d_KBGtzJIGxc61b_5tUaAE7w8-PF85xXRKjyrcjw
       - key: TWITTER_AUTH_TOKEN
-        value: c2da45c233f3df908c9e6ab309afc01f36efb441
+        value: c6289fcc9d99ca623baba0a793c4a85a5be67af3
+      - key: TWITTER_CT0
+        value: 0dee5e8b0c3b6578fc8a515bb1a5c39172903851fcbe08749d032ebd12aeeae9b7b3630fe445025cd0b0a7a5c377440e47310e811717506e897935e6749506aa5e3ee9bdab27538951298508bfe0a8d9
