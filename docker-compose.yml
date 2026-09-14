@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  xai-app:
+    build:
+      context: https://github.com/naveensalvi213/x-ai-automation.git
+    container_name: xai-lead-finder
+    restart: always
+    environment:
+      - PORT=10000
+      - GEMINI_API_KEY=AIzaSyCFEt7KVXWoD8b5bqpVL4t0VZ_PXl96IDA
+      - TWITTER_AUTH_TOKEN=c2da45c233f3df908c9e6ab309afc01f36efb441
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.xai.rule=Host(`leads.ssparkledental.online`)"
+      - "traefik.http.routers.xai.entrypoints=websecure"
+      - "traefik.http.routers.xai.tls.certresolver=myresolver"
+      - "traefik.http.services.xai.loadbalancer.server.port=10000"
+    networks:
+      - traefik_network
+
+networks:
+  traefik_network:
+    external: true
