@@ -123,12 +123,21 @@ async def scrape_keyword_stream(keywords: list, max_scrolls: int = 8, progress_c
 
         await ctx.add_init_script("Object.defineProperty(navigator, 'webdriver', { get: () => undefined });")
 
+        page = await ctx.new_page()
+
+        # Step 1: Domain Warmup - navigate to https://x.com first so cookie context is bound
+        try:
+            print("🌐 Initializing X domain context...", flush=True)
+            await page.goto("https://x.com", wait_until="domcontentloaded", timeout=15000)
+            await page.wait_for_timeout(1000)
+        except Exception as e:
+            print(f"⚠️ Domain warmup notice: {e}", flush=True)
+
         await ctx.add_cookies([
             {"name": "auth_token", "value": AUTH_TOKEN, "domain": ".x.com", "path": "/", "httpOnly": True, "secure": True},
             {"name": "ct0", "value": CT0_TOKEN, "domain": ".x.com", "path": "/", "httpOnly": False, "secure": True}
         ])
 
-        page = await ctx.new_page()
         total_keywords = len(keywords)
 
         for kw_idx, kw in enumerate(keywords, 1):
@@ -153,12 +162,13 @@ async def scrape_keyword_stream(keywords: list, max_scrolls: int = 8, progress_c
                 try:
                     await page.goto(url, wait_until="domcontentloaded", timeout=25000)
                     
-                    # Fast wait & initial micro scroll to trigger X React hydration
+                    # Wait for X React timeline hydration
                     try:
-                        await page.wait_for_selector('article, div[data-testid="cellInner"]', timeout=3000, state="attached")
+                        await page.wait_for_selector('article[data-testid="tweet"], article, div[data-testid="cellInner"]', timeout=8000, state="attached")
                     except Exception:
                         pass
 
+                    await page.wait_for_timeout(2000)
                     await page.evaluate("window.scrollBy(0, 300)")
                     await fast_human_delay(0.4, 0.7)
 
@@ -403,6 +413,22 @@ def api_scrape_stream():
 
     return Response(event_stream(), mimetype="text/event-stream")
 
+@app.route("/manifest.json")
+def pwa_manifest():
+    return jsonify({
+        "name": "X AI Lead Qualifier",
+        "short_name": "X Lead Finder",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#090a10",
+        "theme_color": "#7c3aed",
+        "icons": [{
+            "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>",
+            "sizes": "192x192 512x512",
+            "type": "image/svg+xml"
+        }]
+    })
+
 # ─── FRONTEND HTML WITH GEMINI QUALIFIED LEADS FEED ───────────────────────────
 
 HTML_APP = r"""<!DOCTYPE html>
@@ -410,6 +436,10 @@ HTML_APP = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#090a10">
+<link rel="manifest" href="/manifest.json">
 <title>X AI Lead Qualification Tool with Gemini 3.6</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
